@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>初始化生成器</title>
+	<script src="http://cdn.bootcss.com/jquery/1.11.3/jquery.min.js"></script>
+	<script src="js/jquery.zclip.min.js"></script>
+	<script>
+	//静态方法类型的，成员方法类型的
+		$(function(){
+			$('#className').hide();
+			
+			$('#opt input').click(function(){
+				if($('#newRad').is(':checked')){
+					$('#className').hide();
+				}else{
+					$('#className').show();
+				}
+			})
+			
+		
+			$('#initClick').click(function(){
+				var readInitText = $('#initText').val();
+				//替换换行符
+				var repWrapText = readInitText.replace(/\r\n/g,"");
+				repWrapText = repWrapText.replace(/\n/g,""); 
+				//字符串分割
+				var splitText = repWrapText.split(";");
+				var allType = "";
+				var allAttrName = "";
+				$(splitText).each(function(i,content){
+					var index = content.indexOf(")");
+					if(index!=-1){
+						var lastText = content.substring(index+2,content.length);
+						var nextSpaceIndex = lastText.indexOf(" ");
+						
+						//得到类型
+						var type = lastText.substring(0,nextSpaceIndex);
+						
+						//得到属性名称
+						var nameText = lastText.substring(nextSpaceIndex+1,lastText.length);
+						allAttrName = allAttrName + nameText + ",";
+						//获取一个类型，多个名称的情况
+						var attrNames = nameText.split(",");
+						
+						//追加类型
+						$(attrNames).each(function(i,content){
+							allType = allType + type + ",";
+						})
+					}
+					
+				});
+				console.info(allType);
+				console.info(allAttrName);
+				
+				var allTypes = allType.split(",");
+				var allAttrNames = allAttrName.split(",");
+				
+				//生成初始化方法
+				//+ (CodeFile *)codeFileWithRef:(NSString *)ref andPath:(NSString *)path;
+				//+ (instancetype)htmlMediaWithString:(NSString *)htmlString showType:(MediaShowType)showType;
+				var initText = "";
+				var allInitText = new Array();
+				$(allAttrNames).each(function(i,content){
+					content = content.replace("*","").replace(/(^\s*)|(\s*$)/g,'');//替换*，并去掉空格 
+					//首字母大写
+					var upText = content.replace(/(^|\s+)\w/g,function(s){
+						return s.toUpperCase();
+					});
+					var star = "";
+					if(allAttrNames[i].indexOf("*")!=-1){
+						star = "*";
+					}
+					
+					var tmpAttrName = allAttrNames[i].replace("*","").replace(/(^\s*)|(\s*$)/g,'');
+					if(star==""){
+						initText = initText + upText + ":" + "(" + allTypes[i] + ")" + tmpAttrName + " ";
+					}else{
+						initText = initText + upText + ":" + "(" + allTypes[i] + " " + star + ")" + tmpAttrName + " ";
+					}
+					allInitText.push(initText);
+				})
+				//console.info(allInitText);
+				allInitText.pop();//移除最后一个多余的
+				allAttrNames.pop();
+				
+				var resultText = "";
+				var resultImpText = "";
+				$(allInitText).each(function(i,content){
+					var initContent = content.replace(/(^\s*)|(\s*$)/g,'');
+		
+					//判断静态方法还是实例方法
+					var opt = "-";
+					if(!$('#newRad').is(':checked')){//静态方法生成
+						opt = "+";
+						var className = $('#className input').val();
+						resultImpText = resultImpText + opt + " (" + className +" *)initWith" + initContent + "\n";
+						resultImpText = resultImpText + "{\n";
+						var lowercaseName = className.toLowerCase();
+						resultImpText = resultImpText + "	" + className + " *"+ lowercaseName + " = " +"[["+className+" alloc] init]"
+						resultImpText = resultImpText + "\n";
+						var tmpAllAttrNames = allAttrNames.slice(0,i+1);
+						$(tmpAllAttrNames).each(function(i,content){
+							
+							var attrTmp = content.replace("*","").replace(/(^\s*)|(\s*$)/g,'');
+							resultImpText = resultImpText + "	" + lowercaseName + "." + attrTmp + " = " + attrTmp + "\n";
+						})
+						resultImpText = resultImpText + "	return "+ lowercaseName +";\n";
+						resultImpText = resultImpText + "}\n\n";
+					}else{//实例方法生成
+						resultImpText = resultImpText + opt + " (instancetype)initWith" + initContent + "\n";
+						resultImpText = resultImpText + "{\n";
+						resultImpText = resultImpText + "	" + "if (self = [super init]) \n	{\n"
+
+						var tmpAllAttrNames = allAttrNames.slice(0,i+1);
+						$(tmpAllAttrNames).each(function(i,content){
+							var attrTmp = content.replace("*","").replace(/(^\s*)|(\s*$)/g,'');
+							resultImpText = resultImpText + "		" + "self." + attrTmp + " = " + attrTmp + "\n";
+						})
+						resultImpText = resultImpText + "	}\n";
+						resultImpText = resultImpText + "	return self;\n";
+						resultImpText = resultImpText + "}\n\n";
+					}
+					resultText = resultText + opt + " (instancetype)initWith" + initContent + ";\n";
+					
+				})
+				$('#resultText').val(resultText);
+				$('#resultImpText').val(resultImpText);
+				//生成初始化实现方法
+				
+			})
+			
+			/* 定义所有class为copy标签，点击后可复制被点击对象的文本 */
+			$("#copyResultStr").zclip({
+		        path:'js/ZeroClipboard.swf', //记得把ZeroClipboard.swf引入到项目中 
+		        copy:function(){
+		            return $('#resultText').val();
+		        },
+		        afterCopy: function(){//复制成功
+		            alert("复制成功");
+		        }
+		    });
+
+		    $("#copyImpResultStr").zclip({
+		        path:'js/ZeroClipboard.swf', //记得把ZeroClipboard.swf引入到项目中 
+		        copy:function(){
+		            return $('#resultImpText').val();
+		        },
+		        afterCopy: function(){//复制成功
+		            alert("复制成功");
+		        }
+		    });
+		})
+	</script>
+  </head>
+  <body>
+    <h1>Objc初始化方法生成器</h1>
+	<div id="opt">
+		<label><input type="radio" name="rad" value="" checked="checked" id="newRad"/>实例方法</label>
+		<label><input type="radio" name="rad" value="" id="staticRad"/>静态方法</label>
+		<label id="className">类名:<input type="text" name="rad" value=""/></label>
+	</div>
+	<br/>
+    <textarea cols="100" rows="10" id="initText">
+@property (nonatomic, assign) BOOL can_edit, isHead;
+@property (readwrite, nonatomic, strong) NSString *ref, *path;
+@property (readwrite, nonatomic, strong) CodeFile_RealFile *file;
+@property (strong, nonatomic) Commit *headCommit;
+@property (strong, nonatomic) NSString *editData, *editMessage;
+	</textarea>
+	<button id="initClick">生成</button>
+	<br/>
+	<div style="float:left">
+		<h3>声明结果 <button id="copyResultStr">复制</button></h3>
+		<div id="resultStr">
+			<textarea cols="80" rows="16" id="resultText">
+			</textarea>
+		</div>
+	</div>
+	<div style="float:left;margin-left:20px;">
+		<h3>实现结果 <button id="copyImpResultStr">复制</button></h3>
+		<div id="resultStr">
+			<textarea cols="80" rows="16" id="resultImpText">
+			</textarea>
+		</div>
+	</div>
+	
+	
+  </body>
+</html>
